@@ -1,192 +1,199 @@
 import sqlite3
-
 import pickle
-    # https://docs.python.org/2/library/sqlite3.html
-    # https://www.youtube.com/watch?v=U7nfe4adDw8
+
+def str2(s):
+    if s is None:
+        return 'NULL'
+    if type(s) is str:
+        return "'" + s + "'"
+    return str(s)
 
 
-__author__ = 'Gooch'
-
-
-class Car():
-    def __init__(self, model, whight, speed, wheel_size, color, hight, seat_num, price, tank_capacity, company):
-        self.model = model
-        self.whight = whight
-        self.speed = speed
-        self.wheel_size = wheel_size
-        self.color = color
-        self.hight = hight
-        self.seat_num = seat_num
-        self.tank_capacity = tank_capacity
-        self.price = price
-        self.company = company
+class pilot(object):
+    def __init__(self,User_Name,Password,Biometrics = "null"):
+        self.User_Name = User_Name
+        self.Password = Password
+        self.Biometrics = Biometrics
         
-
-    def new_color(self,new_color):
-        self.color= new_color
-
-
-    def change_seat_num(self, new_seat_num):
-        self.change_seat_num= new_seat_num
-
+    def add_Biometrics(self, Biometrics):
+        """not a done function will add biometrics to the table"""
+        db = User_Orm()
+        db.open_DB()
+        if self.Biometrics is None:
+            #self.flight1 = Flight.id
+            #sql = "UPDATE pilot SET first_flight_id = " + str2(Flight.id) + " WHERE id = " + str2(self.id)
+            #res = db.current.execute(sql)
+            db.commit()
+            db.close_DB()
+        else:
+            return False
 
     def __str__(self):
-        return "car:", self.whight, ":", self.speed,":", self.wheel_size, ":", self.color, ":", self.hight, ":", self.seat_num, ":", self.tank_capacity, ":", self.price, ":", self.model, ":", self.company
+        return str2(self.User_Name) + "," + str2(self.Password) + "," + str2(self.Biometrics)
 
 
-class CarCompany(object):
-    def __init__(self, name, models_num, ceo,):
-        self.name = name
-        self.models_num = models_num
-        self.ceo = ceo
-        
+class flight(object):
+    def __init__(self, id, pilot1, pilot2, from_, to_, departure_time, duration, status="on time"):
+        self.id = id
+        self.pilot1 = pilot1
+        self.pilot2 = pilot2
+        self.from_ = from_
+        self.to_ = to_
+        self.departure_time = departure_time
+        self.duration = duration
+        self.status = status
+
+    def __str__(self):
+        return str2(self.id) + "," + str2(self.pilot1) + "," + str2(self.pilot2) + "," + str2(self.from_) + "," + \
+               str2(self.to_) + "," + str2(self.departure_time) + "," + str2(self.duration) + "," + str2(self.status)
 
 
-
-
-    
-class CarCompanyORM():
+class User_Orm():
     def __init__(self):
-        self.conn = sqlite3.connect('carscompanys.db')  # will store the DB connection
-        self.cursor = self.conn.cursor()   # will store the DB connection cursor
+        self.conn = None  # will store the DB connection
+        self.cursor = None  # will store the DB connection cursor
 
-    
-    def create_table(self, table_name, *args): #
-        self.open_DB()
-
-        command1 = """CREATE TABLE IF NOT EXISTS """ + table_name + """(""" 
-        for arg in args:
-            command1 += arg + "," 
-        command1 = command1[:-1] + """)"""
-
-        print(command1)
-        self.cursor.execute(command1)
-
-        self.conn.commit()
-        self.close_DB
-
-
-    def open_DB(self): #
+    def open_DB(self):
         """
         will open DB file and put value in:
         self.conn (need DB file name)
         and self.cursor
         """
-        self.conn = sqlite3.connect('carscompanys.db')
-        self.cursor=self.conn.cursor()
-        
-        
-    def close_DB(self): #
+        self.conn = sqlite3.connect('database.db')
+        self.current = self.conn.cursor()
+
+    def close_DB(self):
         self.conn.close()
 
-    def fetch_all(self):
-        print(self.cursor.fetchall())
-
-
-    #All read SQL
-
-    def get_car_by_model(self,model):#
-        self.open_DB()
-
-        sql = "SELECT * FROM cars WHERE model=" + '"' + model + '";'
-        print("get car by model: " + sql)
-        res= self.cursor.execute(sql)
-        car = self.cursor.fetchone()
-
-        self.close_DB()
-        return car
-    
-    def GetCompanies(self): #
-        self.open_DB()
-
-        sql = """SELECT * FROM "companies" """
-        res = self.cursor.execute(sql)
-        companies = self.cursor.fetchall()
-
-        self.close_DB()
-        return companies
-        
-
-
-    def GetCars(self):#
-        self.open_DB()
-        
-        sql = "SELECT * FROM cars"
-        self.cursor.execute(sql)
-        cars = self.cursor.fetchall()
-
-        self.close_DB()
-        return cars
-
-
-    def get_car_ceo(self,model):# 
-        self.open_DB()
-
-        sql="SELECT a.ceo FROM companies a , cars b WHERE a.name=b.company"
-        res = self.cursor.execute(sql)
-        ceo = self.cursor.fetchone()
-
-        self.close_DB()
-        return ceo
-
-
-    #__________________________________________________________________________________________________________________
-    #__________________________________________________________________________________________________________________
-    #______end of read start write ____________________________________________________________________________________
-    #__________________________________________________________________________________________________________________
-    #__________________________________________________________________________________________________________________
-    #__________________________________________________________________________________________________________________
-
-
-
-
-    #All write SQL
-
-#  model, whight, speed, wheel_size, color, hight, seat_num, price, tank_capacity, company
-    def insert_car(self, car: Car):#
-        self.open_DB()
-        
-        sql = 'INSERT INTO cars VALUES ("' + car.model + '", "' + car.whight+ '", "' + car.speed+ '", "' + car.wheel_size+ '", "' +car.color+ '", "' +car.hight+ '", "' +car.seat_num+ '", "' +car.price+ '", "' +car.tank_capacity+ '", "' +car.company + '")'
-        print("insert car: "+ sql)
-        self.cursor.execute(sql)
-
-        self.conn.commit()
-        self.close_DB()
-        return 
-
-
-    def insert_company(self, company: CarCompany): #
-        self.open_DB()
-
-        sql = 'INSERT INTO companies VALUES ("' + company.name + '", "'  +company.models_num+ '", "' +company.ceo + '")'
-        print("insert_company: ", sql)
-        self.cursor.execute(sql)
-        
+    def commit(self):
         self.conn.commit()
 
-        self.close_DB()
-        
-
-
-    def delete_company_by_name(self, name): #
-        self.open_DB()
-        
-        sql = "DELETE FROM companies WHERE name=" + '"' + name + '"'
-        print("delete company: " + sql)
-        self.cursor.execute(sql)
-
-        self.conn.commit()
-        self.close_DB()
-        return 
-        
-
-    def delete_car_by_model(self, model):#
+    # All read SQL
+    def get_user(self, id):
         self.open_DB()
 
-        sql = "DELETE FROM cars WHERE model=" + '"' + model + '"'
-        print("delete company: " + sql)
-        self.cursor.execute(sql)
+        sql = "select * from Users where User_Name = " + str(id)
+        res = self.current.execute(sql)
+        ans = res.fetchone()
+        if ans == None:
+            return False
+        ans = 
 
-        self.conn.commit()
         self.close_DB()
-        return 
+        return ans
+
+    def get_all_users(self):
+        self.open_DB()
+
+        sql = "select * from Users"
+        res = self.current.execute(sql)
+        ans = res.fetchall()
+        ans2 = []
+        for Pilot in ans:
+            ans2.append(User(ans[0],ans[1],ans[2]))
+
+        self.close_DB()
+        return ans2
+
+    def add_user(self, User):
+        self.open_DB()
+
+        sql = "insert into Users (User_Name,Password,Biometrics) values(" + str(User) + ")"
+        res = self.current.execute(sql)
+
+        self.commit()
+        self.close_DB()
+
+    def remove_user(self, User_Name):
+        self.open_DB()
+
+        sql = "DELETE FROM Users where User_Name = " + str(User_Name)
+        res = self.current.execute(sql)
+        self.commit()
+
+        self.close_DB()
+
+    def get_flight(self, id):
+        self.open_DB()
+
+        sql = "select * from flight where id = " + str(id)
+        res = self.current.execute(sql)
+        ans = res.fetchone()
+        ans = flight(ans[0], ans[1], ans[2], ans[3], ans[4], ans[5], ans[6], ans[7])
+
+        self.close_DB()
+        return ans
+
+    def get_all_flights(self):
+        self.open_DB()
+
+        sql = "select * from flight"
+        res = self.current.execute(sql)
+        ans = res.fetchall()
+        ans2 = []
+        for Flight in ans:
+            ans2.append(flight(Flight[0], Flight[1], Flight[2], Flight[3], Flight[4], Flight[5], Flight[6], Flight[7]))
+
+        self.close_DB()
+        return ans2
+
+    def add_flight(self, Flight):
+        self.open_DB()
+
+        sql = "insert into flight (id,first_pilot_id,second_pilot_id,from_,to_,departure_time,duration,status) " \
+              "values(" + str(Flight) + ") "
+        print(sql)
+        res = self.current.execute(sql)
+
+        self.commit()
+        self.close_DB()
+
+    def remove_flight(self, id):
+        self.open_DB()
+
+        sql = "DELETE FROM flight where id = " + str(id)
+        res = self.current.execute(sql)
+        self.commit()
+
+        self.close_DB()
+
+    def fill_flight(self, Flight, pilot1, pilot2=None):
+
+        if Flight.pilot2 is not None:
+            return False
+
+        if pilot2 is not None and Flight.pilot1 is not None:
+            return False
+        self.open_DB()
+        if Flight.pilot1 is not None and pilot2 is None:
+            Flight.pilot2 = pilot1.id
+            pilot1.add_flight(Flight)
+
+            sql = "UPDATE flight SET second_pilot_id = " + str2(Flight.pilot2) + " WHERE id = " + str2(Flight.id)
+            res = self.current.execute(sql)
+            self.commit()
+
+        else:
+            Flight.pilot1 = pilot1.id
+            pilot1.add_flight(Flight)
+            Flight.pilot2 = pilot2.id
+            pilot2.add_flight(Flight)
+
+            sql = "UPDATE flight SET first_pilot_id = " + str2(Flight.pilot1) + " WHERE id = " + str2(Flight.id)
+            res = self.current.execute(sql)
+            self.commit()
+
+            sql = "UPDATE flight SET second_pilot_id = " + str2(Flight.pilot2) + " WHERE id = " + str2(Flight.id)
+            res = self.current.execute(sql)
+            self.commit()
+
+        self.close_DB()
+
+    def cancel_flight_without_pilots(self):
+        self.open_DB()
+
+        sql = "update flight set status = 'canceled' where second_pilot_id is NULL"
+        res = self.current.execute(sql)
+        self.commit()
+
+        self.close_DB()

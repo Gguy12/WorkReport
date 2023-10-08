@@ -9,7 +9,7 @@ def str2(s):
     return str(s)
 
 
-class pilot(object):
+class User(object):
     def __init__(self,User_Name,Password,Biometrics = "null"):
         self.User_Name = User_Name
         self.Password = Password
@@ -48,7 +48,7 @@ class flight(object):
                str2(self.to_) + "," + str2(self.departure_time) + "," + str2(self.duration) + "," + str2(self.status)
 
 
-class User_Orm():
+class WR_ORM():
     def __init__(self):
         self.conn = None  # will store the DB connection
         self.cursor = None  # will store the DB connection cursor
@@ -69,18 +69,31 @@ class User_Orm():
         self.conn.commit()
 
     # All read SQL
-    def get_user(self, id):
+    def get_user(self, User_Name):
         self.open_DB()
 
-        sql = "select * from Users where User_Name = " + str(id)
+        sql = "select * from Users where User_Name = " + "\'" + str(User_Name) + "\'"
         res = self.current.execute(sql)
         ans = res.fetchone()
         if ans == None:
             return False
-        ans = 
+        ans = User(ans[0],ans[1],ans[2])
 
         self.close_DB()
         return ans
+
+    def get_password(self, User_Name):
+        self.open_DB()
+
+        sql = "select Password from Users where User_Name = " + "\'" + str(User_Name) + "\'"
+        res = self.current.execute(sql)
+        ans = res.fetchone()
+        if ans == None:
+            return False
+        #ans = User(ans[0],ans[1],ans[2])
+
+        self.close_DB()
+        return ans[0]
 
     def get_all_users(self):
         self.open_DB()
@@ -89,16 +102,16 @@ class User_Orm():
         res = self.current.execute(sql)
         ans = res.fetchall()
         ans2 = []
-        for Pilot in ans:
+        for user in ans:
             ans2.append(User(ans[0],ans[1],ans[2]))
 
         self.close_DB()
         return ans2
 
-    def add_user(self, User):
+    def add_user(self, User: User):
         self.open_DB()
 
-        sql = "insert into Users (User_Name,Password,Biometrics) values(" + str(User) + ")"
+        sql = "insert or ignore into Users (User_Name,Password,Biometrics) values(" + str(User) + ")"
         res = self.current.execute(sql)
 
         self.commit()
@@ -107,7 +120,7 @@ class User_Orm():
     def remove_user(self, User_Name):
         self.open_DB()
 
-        sql = "DELETE FROM Users where User_Name = " + str(User_Name)
+        sql = "DELETE FROM Users where User_Name = \'" + str(User_Name) + "\'"
         res = self.current.execute(sql)
         self.commit()
 

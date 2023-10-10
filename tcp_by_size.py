@@ -1,11 +1,11 @@
-__author__ = 'Yossi'
-
+__author__ = 'Guy'
+from cryptography.fernet import Fernet
 # from  tcp_by_size import send_with_size ,recv_by_size
 
 
 SIZE_HEADER_FORMAT = "000000000|" # n digits for data size + one delimiter
 size_header_size = len(SIZE_HEADER_FORMAT)
-TCP_DEBUG = True
+TCP_DEBUG = False
 LEN_TO_PRINT = 100
 
 
@@ -51,3 +51,17 @@ def send_with_size(sock, bdata):
     if TCP_DEBUG and  len_data > 0:
         print ("\nSent(%s)>>>" % (len_data,), end='')
         print ("%s"%(bytea[:min(len(bytea),LEN_TO_PRINT)],))
+
+def AES(key : Fernet,msg : bytes, decrypt_mode = False) -> bytes:
+    """gets bytes and encrypts them"""
+    if not decrypt_mode:
+        return key.encrypt(msg)
+    return key.decrypt(msg)
+
+def AES_send_with_size(sock,bdata : bytes,key : Fernet):
+    bdata = AES(key,bdata)
+    send_with_size(sock,bdata)
+    
+def AES_recv_by_size(sock,key : Fernet):
+    bdata = recv_by_size(sock)
+    return AES(key,bdata,True)

@@ -1,55 +1,56 @@
 import socket
 import hashlib
 from SQLORM import User,WR_ORM
-from tcp_by_size import recv_by_size,send_with_size
+from tcp_by_size import recv_by_size,send_with_size,AES_recv_by_size,AES_send_with_size
 from threading import Thread
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.fernet import Fernet
-import random
-parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
+import pickle
+import DH
 Worm = WR_ORM() #initializing the SQL class
 exit_all = False
-server_private_key = parameters.generate_private_key()
-server_public_key = server_private_key.public_key()
-Keys = dict()
-Rstrings = dict()
-Encrypted = dict()
+Clients = dict()
+thread_count = 1
 
 def handl_client(sock : socket, tid):
     global exit_all
-
+    global thread_count
+    session = True
     print("New Client num " + str(tid))
 
-    while not exit_all:
+    while not exit_all and session:
         try:
-            
-            if(Encrypted[tid]):
-                AES(tid,recv_by_size(sock),True).decode()
-            else:
-                data = recv_by_size(sock).decode()
-            print("got _>       ", data)
-            if data == "":
-                print("Error: Seens Client DC")
-                break
+            while(session):
+                if(Clients[tid].encrypted):
+                    data = AES_recv_by_size(sock,Clients[tid].AES_key).decode()
+                else:
+                    data = recv_by_size(sock).decode()
+                if data == "":
+                    print("Error: Seens Client DC")
+                    break
 
-            print(data)
-            to_send = do_action(data,tid)
 
-            send_with_size(sock, to_send.encode())
-            if "KILL" in to_send:
-                sock.close()
-                Keys.pop(tid)
-                Encrypted.pop(tid)
+                to_send = do_action(data,tid)
+                if to_send.startswith("INIT"):
+                    send_with_size(sock, to_send.encode())
+                else:
+                    AES_send_with_size(sock,to_send.encode(),Clients[tid].AES_key)
+                if to_send.startswith("KILL"):
+                    session = False
+                if not session:
+                    thread_count -= 1
+                    del Clients[tid]
+                    print("ending session number :   ", tid)
                 
+                    
 
         except socket.error as  err:
             if err.errno == 10054:
                 # 'Connection reset by peer'
-                print("Error %d Client is Gone. %s reset by peer." % (err.errno, str(sock)))
+                print("Error %d Client number %d is Gone. %s reset by peer." % (err.errno,tid, str(sock)))
+                thread_count -= 1
                 break
             else:
-                print("%d General Sock Error Client %s disconnected" % (err.errno, str(sock)))
+                print("%d General Sock Error Client %d disconnected" % (err.errno, tid))
                 break
 
         except Exception as err:
@@ -57,38 +58,31 @@ def handl_client(sock : socket, tid):
             break
     sock.close()
     
-def AES(tid,msg, decrypt_mode = False):
-    """gets bytes and encrypts them"""
-    if not decrypt_mode:
-        return Keys[tid].encrypt(msg)
-    return Keys[tid].decrypt(msg)
+
 
 def do_action(data,tid):
     """
     check what client ask and fill to send with the answer
     """
-    
     to_send = "Not Set Yet"
     action = data[:4] #gets the first 4 letters/action
     data = data[5:]
-    fields = data.split('~')
-    if action == "INIT":
-        Rstr = ''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for i in range(10))
-        to_send = "INIT~%s~%s" % (server_public_key,Rstr)
-        Rstrings[tid] = Rstr
-        shared_secret = server_private_key.exchange(data[0]) #making the DH key
-        Keys[tid] = Fernet(shared_secret) #making the AES key
-    elif action == "CHECK":
-        if AES(tid,data[0],True) == Rstr:
-            to_send = "WAIT~"
-            Rstrings.pop(tid)
-            Encrypted[tid] = True
-        else:
-            to_send = "KILL~"
+    data = data.split('~')
+    if Clients[tid].encrypted == False:
+        if action == "INIT":
+            Clients[tid].get_AES_key(int(data[0]))
+            to_send = "INIT~" + str(Clients[tid].DH_server_public_key)
+            Clients[tid].encrypted = True
+    elif action == "SYNC":
+        to_send = "SNAK"
+    elif action == "FACK":
+        print("Secure connection has been established!")
+        to_send = "KILL~"
+    else:
+        to_send = "KILL~"
         
         
-    print("did action")
-    return to_send.upper
+    return to_send
 
 def Hash_Function(ToHash: str):
     """Returns a hashed value from a string"""
@@ -137,7 +131,21 @@ def DebugLoop():
         elif fun == "Quit":
             break
    
+class Client():
+    def __init__(self):
+        """sets AES_key to false and makes DH_server_public/private_key"""
+        self.AES_key = False 
+        self.encrypted = False
+        self.DH_server_private_key = DH.get_private_key()
+        self.DH_server_public_key = DH.get_public_key(self.DH_server_private_key)
+
+    
+    def get_AES_key(self,client_public_key : int):
+        """returns and sets the AES_key from the DH private and public keys"""
+        self.AES_key = Fernet(DH.get_shared_key(client_public_key,self.DH_server_private_key))
+        return self.AES_key
    
+
 def main():
     global exit_all
 
@@ -147,17 +155,17 @@ def main():
 
     s.bind(("0.0.0.0", 33445))
 
-    s.listen(4)
+    s.listen(1)
     print("after listen")
 
     threads = []
-    i = 1
+    global thread_count
     while True:
         cli_s, addr = s.accept()
-        Encrypted[i] = False
-        t = Thread(target=handl_client, args=(cli_s, i ))
+        Clients[thread_count] = Client()
+        t = Thread(target=handl_client, args=(cli_s, thread_count ))
         t.start()
-        i += 1
+        thread_count += 1
         threads.append(t);
 
     exit_all = True

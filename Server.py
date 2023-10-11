@@ -77,7 +77,14 @@ def do_action(data,tid):
         to_send = "SNAK"
     elif action == "FACK":
         print("Secure connection has been established!")
-        to_send = "KILL~"
+        to_send = "ENTR~"
+    elif action ==  "REGA":
+        if(Register(data[0],data[1])):
+            to_send = f"REGS~{data[0]}"
+        else:
+            to_send = "REGF~User name or password not in correct format"
+    elif action == "LOGN":
+        
     else:
         to_send = "KILL~"
         
@@ -90,17 +97,49 @@ def Hash_Function(ToHash: str):
     hash_object.update(ToHash.encode('utf-8'))
     return hash_object.hexdigest()
 
+def is_valid_hash_bytes(hash_bytes, hash_length=32):
+    """
+    Check if the given bytes look like a valid hash.
 
-def Register(User_Name,Password):
+    Parameters:
+    - hash_bytes: The bytes to be checked.
+    - hash_length: The expected hash length in bytes (default is 32 for SHA-256).
+
+    Returns:
+    - True if the bytes pass all validation checks, False otherwise.
+    """
+    # Check if the byte length is as expected
+    if len(hash_bytes) != hash_length:
+        return False
+
+    # Check if the bytes are a valid hexadecimal representation
+    try:
+        hash_hex = hash_bytes.hex()
+    except:
+        return False
+
+    # Check if the hexadecimal representation contains only valid characters
+    valid_chars = set("0123456789abcdef")
+    for char in hash_hex:
+        if char not in valid_chars:
+            return False
+
+    return True
+
+def Register(User_Name : str,Password : bytes) -> bool:
     """returns true if managed to register recived an already hashed password"""
+    if not is_valid_hash_bytes(Password):
+        return False
+    Password = str(Password)
     name = Worm.get_user(User_Name)
     if name != False:
         return False
     Worm.add_user(User(User_Name,Password))
     return True
 
-def Login(User_Name,Password):
+def Login(User_Name : str,Password : bytes) -> bool:
     """returns true if managed to Login recived an already hashed password"""
+    Password = str(Password)
     hash = Worm.get_password(User_Name)
     if type(hash) == str:
         if hash == Password:
@@ -108,11 +147,11 @@ def Login(User_Name,Password):
     else:
         return False
         
-def Delete(User_Name,Password):
+def Delete(User_Name : str,Password : bytes) -> bool:
     """returns true if managed to Delete"""
     hash = Worm.get_password(User_Name)
     if type(hash) == str:
-        if hash != Hash_Function(Password):
+        if hash != Hash_Function(str(Password)):
             return False
     else:
         return False
@@ -136,6 +175,7 @@ class Client():
         """sets AES_key to false and makes DH_server_public/private_key"""
         self.AES_key = False 
         self.encrypted = False
+        self.logged = True
         self.DH_server_private_key = DH.get_private_key()
         self.DH_server_public_key = DH.get_public_key(self.DH_server_private_key)
 

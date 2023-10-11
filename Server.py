@@ -6,10 +6,84 @@ from threading import Thread
 from cryptography.fernet import Fernet
 import pickle
 import DH
-Worm = WR_ORM() #initializing the SQL class
+ #initializing the SQL class
 exit_all = False
 Clients = dict()
 thread_count = 1
+
+
+   
+class Client():
+    def __init__(self):
+        """sets AES_key to false and makes DH_server_public/private_key"""
+        self.AES_key = False 
+        self.encrypted = False
+        self.logged = False
+        self.user_name = ""
+        self.DH_server_private_key = DH.get_private_key()
+        self.DH_server_public_key = DH.get_public_key(self.DH_server_private_key)
+
+    
+    def get_AES_key(self,client_public_key : int):
+        """returns and sets the AES_key from the DH private and public keys"""
+        self.AES_key = Fernet(DH.get_shared_key(client_public_key,self.DH_server_private_key))
+        return self.AES_key
+    
+    
+
+
+def Hash_Function(ToHash: str):
+    """Returns a hashed value from a string"""
+    hash_object = hashlib.sha256()
+    hash_object.update(ToHash.encode('utf-8'))
+    return hash_object.hexdigest()
+
+def is_valid_hash_bytes(hash_bytes : bytes, hash_length=32) -> True:
+    """
+    Check if the given bytes look like a valid hash.
+    Returns:
+    - True if the bytes pass all validation checks, False otherwise.
+    """
+    if len(hash_bytes) != hash_length:
+        return False
+    try:
+        hash_hex = hash_bytes.hex()
+    except:
+        return False
+    valid_chars = set("0123456789abcdef")
+    for char in hash_hex:
+        if char not in valid_chars:
+            return False
+
+    return True
+
+def register(User_Name : str,Password : str) -> bool:
+    """returns true if managed to register recived an already hashed password"""
+    name = Worm.get_user(User_Name)
+    if name != False:
+        return False
+    
+    Worm.add_user(User(User_Name,Password))
+    return True
+
+def Login(User_Name : str,Password : str) -> bool:
+    """returns true if managed to Login recived an already hashed password"""
+    hash = Worm.get_password(User_Name)
+    if type(hash) == str:
+        if hash == Password:
+            return True
+    else:
+        return False
+        
+def Delete(User_Name : str,Password : str) -> bool:
+    """returns true if managed to Delete"""
+    if Password == Worm.get_password(User_Name):
+        Worm.remove_user(User_Name)
+        return True
+    else:
+        return False
+
+    
 
 def handl_client(sock : socket, tid):
     global exit_all
@@ -25,11 +99,12 @@ def handl_client(sock : socket, tid):
                 else:
                     data = recv_by_size(sock).decode()
                 if data == "":
-                    print("Error: Seens Client DC")
+                    print(f"Error: Seens Client {tid} DC")
                     break
-
-
-                to_send = do_action(data,tid)
+                try:
+                    to_send = do_action(data,Clients[tid],tid)
+                except:
+                    to_send = "KILL"
                 if to_send.startswith("INIT"):
                     send_with_size(sock, to_send.encode())
                 else:
@@ -54,143 +129,61 @@ def handl_client(sock : socket, tid):
                 break
 
         except Exception as err:
-            print("General Error:", err)
+            print("General Error in client {tid}:", err)
             break
     sock.close()
     
 
 
-def do_action(data,tid):
+def do_action(data: str,cli : Client,tid : int) -> str:
     """
     check what client ask and fill to send with the answer
     """
     to_send = "Not Set Yet"
-    action = data[:4] #gets the first 4 letters/action
+    action = data[:4].upper() #gets the first 4 letters/action
     data = data[5:]
     data = data.split('~')
-    if Clients[tid].encrypted == False:
+    if cli.encrypted == False:
         if action == "INIT":
-            Clients[tid].get_AES_key(int(data[0]))
-            to_send = "INIT~" + str(Clients[tid].DH_server_public_key)
-            Clients[tid].encrypted = True
-    elif action == "SYNC":
-        to_send = "SNAK"
-    elif action == "FACK":
-        print("Secure connection has been established!")
-        to_send = "ENTR~"
-    elif action ==  "REGA":
-        if(Register(data[0],data[1])):
-            to_send = f"REGS~{data[0]}"
-        else:
-            to_send = "REGF~User name or password not in correct format"
-    elif action == "LOGN":
-        
-    else:
-        to_send = "KILL~"
+            cli.get_AES_key(int(data[0]))
+            to_send = "INIT~" + str(cli.DH_server_public_key)
+            cli.encrypted = True
+    elif not cli.logged:
+        if action == "SYNC":
+            to_send = "SNAK"
+        elif action == "FACK":
+            print("Secure connection has been established! with client: ",tid)
+            to_send = "ENTR~"
+        elif action ==  "REGA":
+            registered = register(data[0],data[1])
+            if(registered):
+                to_send = f"REGS~{data[0]}"
+                cli.logged = True
+                cli.user_name = data[0]
+                print("New registered user :  ",data[0])
+            else:
+                to_send = "REGF~User name or password not in correct format"
+        elif action == "LOGN":
+            if(Login(data[0],data[1])):
+                to_send = f"REGS~{data[0]}"
+                cli.logged = True
+                cli.user_name = data[0]
+            else:
+                to_send = "REGF~User name or password not correct or not in format"
+    elif cli.logged:
+        if action == "DELT":
+            Delete(cli.user_name,data[0])
+
         
         
     return to_send
 
-def Hash_Function(ToHash: str):
-    """Returns a hashed value from a string"""
-    hash_object = hashlib.sha256()
-    hash_object.update(ToHash.encode('utf-8'))
-    return hash_object.hexdigest()
-
-def is_valid_hash_bytes(hash_bytes, hash_length=32):
-    """
-    Check if the given bytes look like a valid hash.
-
-    Parameters:
-    - hash_bytes: The bytes to be checked.
-    - hash_length: The expected hash length in bytes (default is 32 for SHA-256).
-
-    Returns:
-    - True if the bytes pass all validation checks, False otherwise.
-    """
-    # Check if the byte length is as expected
-    if len(hash_bytes) != hash_length:
-        return False
-
-    # Check if the bytes are a valid hexadecimal representation
-    try:
-        hash_hex = hash_bytes.hex()
-    except:
-        return False
-
-    # Check if the hexadecimal representation contains only valid characters
-    valid_chars = set("0123456789abcdef")
-    for char in hash_hex:
-        if char not in valid_chars:
-            return False
-
-    return True
-
-def Register(User_Name : str,Password : bytes) -> bool:
-    """returns true if managed to register recived an already hashed password"""
-    if not is_valid_hash_bytes(Password):
-        return False
-    Password = str(Password)
-    name = Worm.get_user(User_Name)
-    if name != False:
-        return False
-    Worm.add_user(User(User_Name,Password))
-    return True
-
-def Login(User_Name : str,Password : bytes) -> bool:
-    """returns true if managed to Login recived an already hashed password"""
-    Password = str(Password)
-    hash = Worm.get_password(User_Name)
-    if type(hash) == str:
-        if hash == Password:
-            return True
-    else:
-        return False
-        
-def Delete(User_Name : str,Password : bytes) -> bool:
-    """returns true if managed to Delete"""
-    hash = Worm.get_password(User_Name)
-    if type(hash) == str:
-        if hash != Hash_Function(str(Password)):
-            return False
-    else:
-        return False
-    Worm.remove_user(User_Name)
-    return True
-    
-def DebugLoop():
-    while(True):
-        fun = input("what func do you want? Log,Reg,Del")    
-        if fun == "Reg":
-            print(Register(input("what username would you like"),input("what password would you like")))
-        elif fun == "Log": 
-            print(Login(input("what username would you like"),input("what password would you like")))
-        elif fun == "Del":
-            print(Delete(input("what username would you like"),input("what password would you like")))
-        elif fun == "Quit":
-            break
-   
-class Client():
-    def __init__(self):
-        """sets AES_key to false and makes DH_server_public/private_key"""
-        self.AES_key = False 
-        self.encrypted = False
-        self.logged = True
-        self.DH_server_private_key = DH.get_private_key()
-        self.DH_server_public_key = DH.get_public_key(self.DH_server_private_key)
-
-    
-    def get_AES_key(self,client_public_key : int):
-        """returns and sets the AES_key from the DH private and public keys"""
-        self.AES_key = Fernet(DH.get_shared_key(client_public_key,self.DH_server_private_key))
-        return self.AES_key
-   
+Worm = WR_ORM()
 
 def main():
     global exit_all
 
     exit_all = False
-
     s = socket.socket()
 
     s.bind(("0.0.0.0", 33445))

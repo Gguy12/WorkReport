@@ -3,6 +3,7 @@ from cryptography.fernet import Fernet
 from tcp_by_size import send_with_size,recv_by_size,AES_recv_by_size,AES_send_with_size
 import pickle
 import DH
+import hashlib
 
 
 def adjust_bytes_to_32_bytes(data_bytes):
@@ -19,6 +20,12 @@ def adjust_bytes_to_32_bytes(data_bytes):
     else:
         # The input is already 32 bytes, no need to change it
         return data_bytes
+    
+def Hash_Function(ToHash: str):
+    """Returns a hashed value from a string"""
+    hash_object = hashlib.sha256()
+    hash_object.update(ToHash.encode('utf-8'))
+    return hash_object.hexdigest()
     
 
 def main():
@@ -49,8 +56,24 @@ def main():
         print("sending final ACK to server")
         AES_send_with_size(client_socket,"FACK".encode(),key)
         print("Final ack has been recieved!     Three Way Handshake complete, connenction is secure and has been established")
-    print("server sent:     ",AES_recv_by_size(client_socket,key))
-    
+    data = AES_recv_by_size(client_socket,key)
+    print("server sent:     ",data)
+    if str(data) != "ENTR~":
+        print("Error didnt recieve ENTR")
+    act = input("REGA, LOGN OR DELT? --->   ")
+    while(act != "exit".upper):
+        
+        user = input("print what is your user? --->     ")
+        password = Hash_Function(input("what is your password? --->     "))
+        to_send = f"{act}~"
+        if act == "DELT":
+            to_send += password
+        else:
+            to_send+= f"{user}~{password}"
+        AES_send_with_size(client_socket,to_send.encode(),key)
+        data = AES_recv_by_size(client_socket,key)
+        print("server sent:     ",data)
+        act = input("REGA, LOGN OR DELT? --->   ")
     
     
 main()
